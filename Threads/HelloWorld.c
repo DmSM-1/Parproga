@@ -8,6 +8,7 @@
 
 typedef struct _thread_data_t{
     int tid;
+    int rank;
     double stuff;
 }thread_data_t;
 
@@ -15,7 +16,7 @@ typedef struct _thread_data_t{
 void* thr_func(void* arg){
     thread_data_t *thr_data = (thread_data_t*)arg;
 
-    printf("Hello World|\tthr:%2d|\ttotal:%2d|\n", thr_data->tid, NUM_THREADS);
+    printf("Hello World| thr:%2d| total:%2d| rank:%2d|\n", thr_data->tid, NUM_THREADS, thr_data->rank);
     pthread_exit(NULL);
 }
 
@@ -29,9 +30,10 @@ int main(int argc, char **argv){
 
     pthread_t thr[NUM_THREADS];
     thread_data_t thr_data[NUM_THREADS];
-    int rc;
-
+    
+    
     for(int i = 0; i < NUM_THREADS; i++){
+        thr_data[i].rank = rank;
         thr_data[i].tid = i;
         pthread_create(&thr[i], NULL, thr_func, &thr_data[i]);
     }
