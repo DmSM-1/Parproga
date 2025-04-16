@@ -8,6 +8,8 @@
 double result = 0.0;
 pthread_mutex_t lock_r;
 
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+int current_tid = 0;
 
 typedef struct _thread_data_t{
     int tid;
@@ -22,17 +24,18 @@ void* thr_func(void* arg){
 
     for(int i = 0; i < thr_data->load; i++)
         sum += 1.0/(double)(i+thr_data->begin+1);
+        
+    pthread_mutex_lock(&lock_r);
+        while(current_tid != thr_data->tid)
+            pthread_cond_wait(&cond, &lock_r);
+        result += sum;
+        printf("Thr%d: sum:%lf load:%d begin:%d\n", thr_data->tid, result, thr_data->load, thr_data->begin);
+    pthread_mutex_unlock(&lock_r);
 
-    printf("Thr%d: sum:%lf load:%d begin:%d\n", thr_data->tid, sum, thr_data->load, thr_data->begin);
+    current_tid++;
+    pthread_cond_broadcast(&cond);
     
-    // pthread_mutex_lock(&lock_r);
-    //     result += sum;
-    //     printf("Thr%d: sum:%lf load:%d begin:%d\n", thr_data->tid, result, thr_data->load, thr_data->begin);
-    // pthread_mutex_unlock(&lock_r);
-
-    double *r = (double*)malloc(sizeof(double));
-    *r = sum;
-    pthread_exit((void*)r);
+    pthread_exit(NULL);
 }
 
 
@@ -57,10 +60,8 @@ int main(int argc, char **argv){
 
     int load = N/num_thr;
     int overload = N%num_thr;
-    
-    pthread_mutex_init(&lock_r, NULL);
 
-    for(int i = 0, localN = 0; i < num_thr; i++){
+    for(int i = num_thr-1, localN = 0; i > -1; i--){
         thr_data[i].tid     = i;
         thr_data[i].load    = load+(overload>i);
         thr_data[i].begin   = localN;
@@ -70,10 +71,7 @@ int main(int argc, char **argv){
     }
 
     for(int i = 0; i < num_thr; i++){
-        void* ret;
-        pthread_join(thr[i], &ret);
-        result += *(double*)ret;
-        free((double*)ret);
+        pthread_join(thr[i], NULL);
     }
 
     printf("Thr MAIN: sum:%lf\n", result);
