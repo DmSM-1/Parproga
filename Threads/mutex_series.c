@@ -34,7 +34,7 @@ void* thr_func(void* arg){
 
     current_tid++;
     pthread_cond_broadcast(&cond);
-    
+
     pthread_exit(NULL);
 }
 
@@ -61,7 +61,8 @@ int main(int argc, char **argv){
     int load = N/num_thr;
     int overload = N%num_thr;
 
-    for(int i = num_thr-1, localN = 0; i > -1; i--){
+    // for(int i = num_thr-1, localN = 0; i > -1; i--){
+    for(int i = 0, localN = 0; i < num_thr; i++){
         thr_data[i].tid     = i;
         thr_data[i].load    = load+(overload>i);
         thr_data[i].begin   = localN;
