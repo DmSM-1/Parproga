@@ -60,7 +60,7 @@ int main(int argc, char **argv){
     
     pthread_mutex_init(&lock_r, NULL);
 
-    for(int i = 0, localN = 0; i < NUM_THREADS; i++){
+    for(int i = 0, localN = 0; i < num_thr; i++){
         thr_data[i].tid     = i;
         thr_data[i].load    = load+(overload>i);
         thr_data[i].begin   = localN;
