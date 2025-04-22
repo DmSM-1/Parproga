@@ -10,9 +10,13 @@
 int K, M;
 double X,T, t, h;
 
-int  **planner; 
-int  **state;
-int  **result;
+typedef struct State 
+{
+    int j;
+    int k;
+    int s;
+}State;
+
 
 
 double psi(double x){
@@ -55,16 +59,25 @@ int main(int argc, char** argv){
     if (!(K = atof(argv[3]) && M == atof(argv[4])))
         return EXIT_FAILURE;
 
-
     t = T/(double)M;
     h = X/(double)K;
 
     int commsize, rank;
     double proc_time = 0;
 
+
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    if (!rank){
+        int  *planner    = (State*)calloc(M*K, sizeof(int*));
+        int  *result   = (int*)calloc(M*K, sizeof(int*));
+
+        for()
+
+    }
+    
 
 
 
