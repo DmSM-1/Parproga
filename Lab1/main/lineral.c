@@ -48,7 +48,7 @@ double error(double *f){
     double err = 0;
     for(int i = 0, pos = 0; i < K; i++){
         for(int j = 0; j < M; j++, pos++){
-            err += pow(f[pos]-(cos(i/(K-1))+sin(j/(M-1))),2);
+            err += pow(f[pos]-(cos(j/(K-1))+sin(i/(M-1))),2);
         }
         err /= M*K;
         return sqrt(err);
@@ -130,6 +130,7 @@ int main(int argc, char** argv){
 
         proc_time += MPI_Wtime();
         double err = error(res);
+        //print_res(res);
         printf("time: %lf error: %lf\n", proc_time, err);
         
         free(res);
@@ -154,16 +155,19 @@ int main(int argc, char** argv){
         double *previos = (double*)calloc(iter+2, sizeof(double));
         int m = 0;
 
+        MPI_Request recv_req_arr[4];
+
         for(int k = 0; k < K; k++){
             for(m = 0; m < iter; m++){
                 if(k==0){
                     data[m] = phi((double)(m+begin)/(M-1));
                 }else if(m+begin==0){
                     data[m] = psi((double)(k)/(K-1));
-                }else if(m+begin==K-1){
-                    data[m] = (fanc((double)m/(M-1),(double)(k-1)/(K-1))-(previos[m+1]-previos[m])/h)*t+previos[m+1];
+                }else if(m+begin==M-1){
+                    data[m] = 0;
+                    data[m] = (fanc((double)(m-1)/(M-1),(double)(k-1)/(K-1))-(previos[m+1]-previos[m])/h)*t+previos[m+1];
                 }else{
-                    data[m] = (fanc((double)m/(M-1),(double)(k-1)/(K-1))-(previos[m+2]-previos[m])/2/h)*t+0.5*(previos[m+2]+previos[m]);
+                    data[m] = (fanc((double)(m-1)/(M-1),(double)(k-1)/(K-1))-(previos[m+2]-previos[m])/2/h)*t+0.5*(previos[m+2]+previos[m]);
                 }
             }
             memcpy((void*)(previos+1), (void*)(data), iter*sizeof(double));
@@ -172,23 +176,43 @@ int main(int argc, char** argv){
                 
             if(!odd){
                 if(!first)
-                    MPI_Send((void*)(data), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+                    MPI_Isend((void*)(data), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, &recv_req_arr[0]);
                 if(!last){
-                    MPI_Send((void*)(data+iter-1), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
-                    MPI_Recv((void*)(previos+iter+1), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, &status);
+                    MPI_Isend((void*)(data+iter-1), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, &recv_req_arr[1]);
+                    MPI_Irecv((void*)(previos+iter+1), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, &recv_req_arr[2]);
                 }
                 if(!first)
-                    MPI_Recv((void*)(previos), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, &status);
+                    MPI_Irecv((void*)(previos), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, &recv_req_arr[3]);
+
+                if(!first){
+                    MPI_Wait(&recv_req_arr[0], &status);
+                    MPI_Wait(&recv_req_arr[3], &status);
+                }
+                if(!last){
+                    MPI_Wait(&recv_req_arr[1], &status);
+                    MPI_Wait(&recv_req_arr[2], &status);
+                }
 
             }else{
-                MPI_Recv((void*)(previos), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, &status);
+                MPI_Irecv((void*)(previos), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, &recv_req_arr[0]);
                 if(!last)
-                    MPI_Recv((void*)(previos+iter+1), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, &status);
-                MPI_Send((void*)(data), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD);
+                    MPI_Irecv((void*)(previos+iter+1), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, &recv_req_arr[1]);
+                MPI_Isend((void*)(data), 1, MPI_DOUBLE, rank-1, 0, MPI_COMM_WORLD, &recv_req_arr[2]);
                 if(!last)
-                    MPI_Send((void*)(data+iter-1), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
-            }
+                    MPI_Isend((void*)(data+iter-1), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD, &recv_req_arr[3]);
 
+                if(!first){
+                    MPI_Wait(&recv_req_arr[0], &status);
+                    MPI_Wait(&recv_req_arr[2], &status);
+                }
+                if(!last){
+                    MPI_Wait(&recv_req_arr[1], &status);
+                    MPI_Wait(&recv_req_arr[3], &status);
+                }
+            }
+        }
+
+        for(int k = 0; k < K; k++){
             MPI_Wait(&recv_req, &status);
         }
 
