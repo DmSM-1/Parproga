@@ -91,8 +91,6 @@ int main(int argc, char** argv){
     int commsize, rank;
     double proc_time = 0;
 
-    //K++;
-    //M++;
     int total = K*M;
     
     MPI_Init(&argc, &argv);
@@ -144,7 +142,6 @@ int main(int argc, char** argv){
             }
         }
         double err = error(f);
-        //print_res(f);
         free(f);
         proc_time += MPI_Wtime();
         printf("execution time:%lf error %lf\n", proc_time, err);
