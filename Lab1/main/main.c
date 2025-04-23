@@ -5,7 +5,8 @@
 
 //answer = sin(x) + cos(t)
 //f = cos(x) - sin(t)
-
+//xt
+//x+t
 
 int K, M;
 double X,T, t, h;
@@ -41,15 +42,21 @@ double fanc(double t, double x){
 }
 
 
-double main_method(double** net, int j, int m){
-    return 0;
+double error(double *f){
+    double err = 0;
+    for(int i = 0, pos = 0; i < K; i++){
+        for(int j = 0; j < M; j++, pos++){
+            err += pow(f[pos]-(cos(i/(K-1))+sin(j/(M-1))),2);
+        }
+        err /= M*K;
+        return sqrt(err);
+    }
 }
 
 
 double print_res(double* f){
-    printf("\n");
-    for(int i = 0, pos = 0; i < M; i++){
-        for(int j = 0; j < K; j++, pos++){
+    for(int i = 0, pos = 0; i < K; i++){
+        for(int j = 0; j < M; j++, pos++){
             printf("%3.3lf ", f[pos]);
         }
         printf("\n");
@@ -77,14 +84,15 @@ int main(int argc, char** argv){
     if(!M || !K)
         return EXIT_FAILURE;
 
-    t = T/(double)M;
-    h = X/(double)K;
+    t = T/(double)(M-1);
+    h = X/(double)(K-1);
+
 
     int commsize, rank;
     double proc_time = 0;
 
-    K++;
-    M++;
+    //K++;
+    //M++;
     int total = K*M;
     
     MPI_Init(&argc, &argv);
@@ -97,6 +105,9 @@ int main(int argc, char** argv){
     if (executors > M)
         executors = M;
 
+    double *data = (double*)calloc((M/executors+1)*4, sizeof(double));
+    double *res = (double*)calloc((M/executors+1), sizeof(double));
+
     if (!rank){
         //stage 1
         proc_time -= MPI_Wtime();
@@ -105,44 +116,66 @@ int main(int argc, char** argv){
         int cycles = M / executors;
         int overload = M % executors;
         int executors_num = 0;
-
+        int vals = 0;
         for(int i = 0; i < total; i++)
             f[i] = 0;
 
-        for(int i = 0, T = 0, X = 0; i < cycles + (overload>0); i++){
-            executors_num = (i==cycles)?overload:executors;
-            for(int j = 0; j < executors_num; j++, T++){
-                MPI_Send((void*)&T, 1, MPI_INTEGER, (T)%executors+1, 0, MPI_COMM_WORLD);
-                MPI_Send((void*)&X, 1, MPI_INTEGER, (T)%executors+1, 0, MPI_COMM_WORLD);
-            }
-            T -= executors_num;
-            for(int j = 0; j < executors_num; j++, T++){
-                MPI_Recv((void*)&(f[T]), 1, MPI_DOUBLE, (T)%executors+1, 0, MPI_COMM_WORLD, &status);
-                //print_res(f);
-            }
-                
-        }
         
+        for(int l = 0; l < K; l++){
+            for(int i = 0; i < executors; i++){
+                int vals = cycles + (i < overload);
+                for(int j = 0; j < vals; j++){
+                    data[4*j]   = (double)(executors*j+i);
+                    data[4*j+1] = (double)l;
+                    int pos = executors*j+i;
+                    if (l > 0 && pos!=0 && pos!=M){
+                        data[4*j+2] = f[(l-1)*M+j*executors+i-1];
+                        data[4*j+3] = f[(l-1)*M+j*executors+i+1];
+                    }
+                }
+                MPI_Send((void*)data, vals*4, MPI_DOUBLE, i+1, 0, MPI_COMM_WORLD);
+            }
+            for(int i = 0; i < executors; i++){
+                int vals = cycles + (i < overload);
+                MPI_Recv((void*)res, vals, MPI_DOUBLE, i+1, 0, MPI_COMM_WORLD, &status);
+                for (int j = 0; j < vals; j++){
+                    f[l*M+j*executors+i] = res[j];
+                }
+            }
+        }
+        double err = error(f);
+        //print_res(f);
         free(f);
         proc_time += MPI_Wtime();
-        printf("execution time:%lf\n", proc_time);
+        printf("execution time:%lf error %lf\n", proc_time, err);
     }
 
     else if(rank < M+2){
         int cycles = M / executors + (rank <= M%executors);
-        int X = 0, T = 0;
-        double f_val;
-        for(int i = 0; i < cycles; i++){
-            MPI_Recv((void*)&(T), 1, MPI_INTEGER, 0, 0, MPI_COMM_WORLD, &status);
-            MPI_Recv((void*)&(X), 1, MPI_INTEGER, 0, 0, MPI_COMM_WORLD, &status);
-            f_val = phi(T/t);
-            MPI_Send((void*)&f_val, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+        for(int l = 0; l < K; l++){
+            MPI_Recv((void*)data, cycles*4, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
+            for(int i = 0; i < cycles; i++){
+                if (data[4*i+1] < 1.0){
+                    res[i] = phi(data[4*i]/(M-1));
+                }else if(data[4*i] < 1.0){
+                    res[i] = psi(data[4*i+1]/(K-1));
+                }else if(data[4*i] < M-1){
+                    res[i] = (fanc(data[4*i]/(M-1), data[4*i+1]/(K-1)));
+                    res[i] -= (data[4*i+3]-data[4*i+2])/2/h;
+                    res[i] *= t;
+                    res[i] += (data[4*i+3]+data[4*i+2])/2;
+                }else{
+                    res[i] = 0.0;
+                }
+            }
+            MPI_Send((void*)res, cycles, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
         }
 
     }
     
 
     MPI_Finalize();
-
+    free(res);
+    free(data);
     return 0;
 }
