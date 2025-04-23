@@ -108,6 +108,7 @@ int main(int argc, char** argv){
     }
 
     MPI_Status status;
+    MPI_Request recv_req;
 
     int proc_len = (int)(M/(commsize-1));
     int proc_tail = M%(commsize-1);
@@ -121,16 +122,15 @@ int main(int argc, char** argv){
         for(int k = 0; k < K; k++){
             for(int m = 0, proc = 0; proc < exec_num; proc++){
                 num = (proc<proc_tail)?(proc_len+1):(proc_len);
-                MPI_Recv((void*)(res+k*M+m), num, MPI_DOUBLE, proc, 0, MPI_COMM_WORLD, &status);
+                MPI_Irecv((void*)(res+k*M+m), num, MPI_DOUBLE, proc, 0, MPI_COMM_WORLD, &recv_req);
+                MPI_Wait(&recv_req, &status);
                 m += num;
             }
         }
 
         proc_time += MPI_Wtime();
-        //print_res(res);
         double err = error(res);
         printf("time: %lf error: %lf\n", proc_time, err);
-        //printf("res:%lf\n", res[(int)(x_cor*K)*M+(int)(time*M)]);
         
         free(res);
 
@@ -167,7 +167,7 @@ int main(int argc, char** argv){
                 }
             }
             memcpy((void*)(previos+1), (void*)(data), iter*sizeof(double));
-            MPI_Send((void*)(data), iter, MPI_DOUBLE, commsize-1, 0, MPI_COMM_WORLD);
+            MPI_Isend((void*)(data), iter, MPI_DOUBLE, commsize-1, 0, MPI_COMM_WORLD, &recv_req);
 
                 
             if(!odd){
@@ -188,6 +188,8 @@ int main(int argc, char** argv){
                 if(!last)
                     MPI_Send((void*)(data+iter-1), 1, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
             }
+
+            MPI_Wait(&recv_req, &status);
         }
 
         //printf("rank:%d ", rank);
