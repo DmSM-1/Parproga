@@ -89,16 +89,24 @@ int main(int argc, char** argv){
     t = T/(double)(M-1);
     h = X/(double)(K-1);
 
-
+    
     int commsize, rank;
     double proc_time = 0;
-
+    
     int total = K*M;
     
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    
+
+    double time, x_cor = 0;
+    double answer = 0;
+
+    if(argc == 7){
+        time = atof(argv[5]);
+        x_cor = atof(argv[6]);
+    }
+
     MPI_Status status;
 
     int proc_len = (int)(M/(commsize-1));
@@ -122,6 +130,8 @@ int main(int argc, char** argv){
         //print_res(res);
         double err = error(res);
         printf("time: %lf error: %lf\n", proc_time, err);
+        //printf("res:%lf\n", res[(int)(x_cor*K)*M+(int)(time*M)]);
+        
         free(res);
 
     }else if(rank < exec_num){
